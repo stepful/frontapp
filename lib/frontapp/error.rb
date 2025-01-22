@@ -14,8 +14,10 @@ module Frontapp
 
     def initialize(response)
       @response = response
-      super("Response: #{response.inspect}\nBody: #{response.body}")
+      super("Response Body: #{response.body}")
     end
+
+    attr_reader :response
   end
 
   class BadRequestError < Error; end
