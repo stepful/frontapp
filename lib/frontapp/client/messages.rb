@@ -54,7 +54,12 @@ module Frontapp
                                 :to,
                                 :cc,
                                 :bcc)
-        create("channels/#{channel_id}/messages", cleaned)
+        path = "channels/#{channel_id}/messages"
+        if attachments?(cleaned)
+          create_multipart(path, cleaned)
+        else
+          create(path, cleaned)
+        end
       end
 
       # Parameters
@@ -92,7 +97,12 @@ module Frontapp
                                 :to,
                                 :cc,
                                 :bcc)
-        create_without_response("conversations/#{conversation_id}/messages", cleaned)
+        path = "conversations/#{conversation_id}/messages"
+        if attachments?(cleaned)
+          create_multipart(path, cleaned)
+        else
+          create_without_response(path, cleaned)
+        end
       end
 
       # Parameters
@@ -173,6 +183,13 @@ module Frontapp
                                 :tags,
                                 { metadata: [:thread_ref, :is_inbound, :is_archived, :should_skip_rules] })
         create("inboxes/#{inbox_id}/imported_messages", cleaned)
+      end
+
+      # Front only accepts file attachments as multipart form data, so a
+      # message with attachments is routed through create_multipart.
+      private def attachments?(params)
+        attachments = params[:attachments]
+        attachments.respond_to?(:empty?) ? !attachments.empty? : !attachments.nil?
       end
     end
   end

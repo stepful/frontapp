@@ -193,4 +193,196 @@ RSpec.describe 'Messages' do
       to_return(status: 202, body: import_message_response)
     frontapp.import_message(inbox_id, data)
   end
+
+  describe "attachments" do
+    let(:messages_url) { "#{base_url}/channels/#{channel_id}/messages" }
+    let(:replies_url) { "#{base_url}/conversations/#{conversation_id}/messages" }
+    let(:multipart_headers) {
+      {
+        "Authorization" => "Bearer",
+        "Content-Type" => %r{\Amultipart/form-data; boundary=.+},
+        "User-Agent" => "Frontapp Ruby Gem 0.0.12"
+      }
+    }
+    let(:base_data) {
+      {
+        author_id: "alt:email:leela@planet-exress.com",
+        subject: "Good news everyone!",
+        body: "Please find my resume attached.",
+        text: nil,
+        options: {
+          tags: ["from_classroom", "resume"],
+          archive: true
+        },
+        to: [ "calculon@momsbot.com" ],
+        cc: [],
+        bcc: []
+      }
+    }
+    let(:resume_hash) {
+      { io: StringIO.new("%PDF-1.4 resume"), filename: "resume.pdf", content_type: "application/pdf" }
+    }
+    let(:notes_upload_io) {
+      Faraday::UploadIO.new(StringIO.new("some notes"), "text/plain", "notes.txt")
+    }
+
+    # Parses a multipart/form-data request into ordered parts:
+    # [{ name:, filename:, content_type:, body: }, ...]
+    def multipart_parts(request)
+      boundary = request.headers["Content-Type"][/boundary=(.+)\z/, 1]
+      chunks = request.body.split("--#{boundary}")[1..]
+      chunks.reject { |chunk| chunk.strip == "--" || chunk.strip.empty? }.map do |chunk|
+        head, body = chunk.sub(/\A\r\n/, "").split("\r\n\r\n", 2)
+        headers = head.split("\r\n").to_h { |line| line.split(": ", 2) }
+        disposition = headers.fetch("Content-Disposition")
+        {
+          name: disposition[/name="([^"]*)"/, 1],
+          filename: disposition[/filename="([^"]*)"/, 1],
+          content_type: headers["Content-Type"],
+          body: body.sub(/\r\n\z/, "")
+        }
+      end
+    end
+
+    def fake_io(size)
+      double("io", read: "", size: size, length: size)
+    end
+
+    # permit re-emits keys in whitelist order, so JSON bodies must be built in
+    # that order to match byte-for-byte.
+    def permit_ordered(data, extra_after_text: {}, extra_after_options: {})
+      {
+        author_id: data[:author_id],
+        subject: data[:subject],
+        body: data[:body],
+        text: data[:text],
+        **extra_after_text,
+        options: data[:options],
+        **extra_after_options,
+        to: data[:to],
+        cc: data[:cc],
+        bcc: data[:bcc]
+      }
+    end
+
+    it "sends a message as JSON when attachments are empty" do
+      data = permit_ordered(base_data, extra_after_text: { attachments: [] })
+      expect(frontapp).not_to receive(:create_multipart)
+      stub_request(:post, messages_url).
+        with( body: data.to_json,
+              headers: headers).
+        to_return(status: 202, body: send_message_from_channel_response)
+      expect(frontapp.send_message(channel_id, data)).
+        to eq("conversation_reference" => "3b1q41d8@frontapp.com")
+    end
+
+    it "sends a reply as JSON when attachments are omitted" do
+      data = permit_ordered(base_data, extra_after_options: { channel_id: channel_id })
+      expect(frontapp).not_to receive(:create_multipart)
+      stub_request(:post, replies_url).
+        with( body: data.to_json,
+              headers: headers).
+        to_return(status: 202)
+      expect(frontapp.send_reply(conversation_id, data)).to be_nil
+    end
+
+    it "sends a message as multipart with Front's form keys and file parts" do
+      data = base_data.merge(attachments: [resume_hash, notes_upload_io])
+      captured = nil
+      stub_request(:post, messages_url).
+        with(headers: multipart_headers) { |request| captured = request; true }.
+        to_return(status: 202, body: send_message_from_channel_response)
+
+      result = frontapp.send_message(channel_id, data)
+
+      expect(result).to eq("conversation_reference" => "3b1q41d8@frontapp.com")
+      parts = multipart_parts(captured)
+      fields = parts.reject { |part| part[:filename] }.map { |part| [part[:name], part[:body]] }
+      expect(fields).to eq([
+        ["author_id", "alt:email:leela@planet-exress.com"],
+        ["subject", "Good news everyone!"],
+        ["body", "Please find my resume attached."],
+        ["options[tags][]", "from_classroom"],
+        ["options[tags][]", "resume"],
+        ["options[archive]", "true"],
+        ["to[]", "calculon@momsbot.com"]
+      ])
+      expect(parts.select { |part| part[:filename] }).to eq([
+        { name: "attachments[]", filename: "resume.pdf", content_type: "application/pdf", body: "%PDF-1.4 resume" },
+        { name: "attachments[]", filename: "notes.txt", content_type: "text/plain", body: "some notes" }
+      ])
+    end
+
+    it "sends a reply as multipart when attachments are present" do
+      data = base_data.merge(channel_id: channel_id, attachments: [resume_hash])
+      captured = nil
+      stub_request(:post, replies_url).
+        with(headers: multipart_headers) { |request| captured = request; true }.
+        to_return(status: 202)
+
+      expect(frontapp.send_reply(conversation_id, data)).to be_nil
+
+      parts = multipart_parts(captured)
+      expect(parts.find { |part| part[:name] == "channel_id" }[:body]).to eq(channel_id)
+      expect(parts.select { |part| part[:filename] }).to eq([
+        { name: "attachments[]", filename: "resume.pdf", content_type: "application/pdf", body: "%PDF-1.4 resume" }
+      ])
+    end
+
+    it "defaults a missing content type to application/octet-stream" do
+      data = base_data.merge(attachments: [{ io: StringIO.new("bytes"), filename: "blob.bin" }])
+      captured = nil
+      stub_request(:post, messages_url).
+        with(headers: multipart_headers) { |request| captured = request; true }.
+        to_return(status: 202, body: send_message_from_channel_response)
+
+      frontapp.send_message(channel_id, data)
+
+      file = multipart_parts(captured).find { |part| part[:filename] }
+      expect(file).to include(filename: "blob.bin", content_type: "application/octet-stream", body: "bytes")
+    end
+
+    it "raises before sending when attachments exceed 25 MB combined" do
+      data = base_data.merge(attachments: [
+        { io: fake_io(13 * 1024 * 1024), filename: "a.pdf", content_type: "application/pdf" },
+        { io: fake_io(13 * 1024 * 1024), filename: "b.pdf", content_type: "application/pdf" }
+      ])
+
+      expect { frontapp.send_message(channel_id, data) }.
+        to raise_error(Frontapp::AttachmentsTooLargeError, /25 MB/)
+      expect(a_request(:post, messages_url)).not_to have_been_made
+    end
+
+    it "allows attachments totalling exactly 25 MB" do
+      data = base_data.merge(attachments: [
+        { io: fake_io(Frontapp::Client::MAX_ATTACHMENTS_SIZE), filename: "a.pdf", content_type: "application/pdf" }
+      ])
+      stub_request(:post, messages_url).
+        with(headers: multipart_headers).
+        to_return(status: 202, body: send_message_from_channel_response)
+
+      expect { frontapp.send_message(channel_id, data) }.not_to raise_error
+    end
+
+    it "rejects attachments that are neither hashes nor upload parts" do
+      data = base_data.merge(attachments: ["resume.pdf"])
+      expect { frontapp.send_message(channel_id, data) }.
+        to raise_error(ArgumentError, /Faraday::UploadIO objects or hashes/)
+    end
+
+    it "rejects an attachment hash without an io" do
+      data = base_data.merge(attachments: [{ filename: "resume.pdf", content_type: "application/pdf" }])
+      expect { frontapp.send_message(channel_id, data) }.
+        to raise_error(ArgumentError, /:io must respond to #read/)
+    end
+
+    it "surfaces Front errors from the multipart request" do
+      data = base_data.merge(attachments: [resume_hash])
+      stub_request(:post, messages_url).
+        with(headers: multipart_headers).
+        to_return(status: 400, body: %Q{{"_error":{"status":400,"title":"Bad request"}}})
+
+      expect { frontapp.send_message(channel_id, data) }.to raise_error(Frontapp::BadRequestError)
+    end
+  end
 end

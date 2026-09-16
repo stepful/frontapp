@@ -1,5 +1,6 @@
 require 'uri'
 require 'faraday'
+require 'faraday/multipart'
 require 'json'
 require_relative 'client/attachments'
 require_relative 'client/channels'
@@ -21,7 +22,14 @@ require_relative 'error'
 require_relative 'version'
 
 module Frontapp
+  # Raised before any request is made when the attachments on a single message
+  # exceed Front's per-message limit.
+  class AttachmentsTooLargeError < ArgumentError; end
+
   class Client
+
+    # Front rejects messages whose attachments total more than 25 MB.
+    MAX_ATTACHMENTS_SIZE = 25 * 1024 * 1024
 
     include Frontapp::Client::Attachments
     include Frontapp::Client::Channels
@@ -49,7 +57,14 @@ module Frontapp
           Accept: "application/json",
           Authorization: "Bearer #{auth_token}",
           "User-Agent": user_agent
-        })
+        }) do |f|
+        # Only engages for Hash bodies posted as multipart/form-data (see
+        # create_multipart). JSON requests set a String body and are untouched.
+        f.request(:multipart)
+        # Faraday adds url_encoded by default only when no block is given;
+        # keep it so the middleware stack is unchanged for existing requests.
+        f.request(:url_encoded)
+      end
     end
 
     def list(path, params = {}, &block)
@@ -111,6 +126,29 @@ module Frontapp
       JSON.parse(res.body)
     end
 
+    # Posts params as multipart/form-data. Front only accepts file attachments
+    # this way. Nested hashes and arrays are flattened into the form keys Front
+    # expects (`options[tags][]`, `to[]`), nil values are dropped since form
+    # data has no null, and each entry of params[:attachments] is sent as an
+    # `attachments[]` file part carrying its filename and content type.
+    #
+    # Attachments may be Faraday::Multipart::FilePart objects (aliased as
+    # Faraday::UploadIO) or hashes with :io, :filename and :content_type.
+    # Raises AttachmentsTooLargeError before sending when the combined
+    # attachment size exceeds MAX_ATTACHMENTS_SIZE.
+    #
+    # Returns the parsed JSON body, or nil when Front replies with no body.
+    def create_multipart(path, params)
+      body = multipart_body(params)
+      res = @connection.post path do |req|
+        req.headers[:content_type] = 'multipart/form-data'
+        req.body = body
+      end
+
+      raise Error.from_response(res) unless res.success?
+      res.body.to_s.empty? ? nil : JSON.parse(res.body)
+    end
+
     def create_without_response(path, body)
       res = @connection.post path do |req|
            req.headers[:content_type] = 'application/json'
@@ -152,6 +190,71 @@ module Frontapp
       end
       res << params.map {|k,v| "#{k}=#{URI.encode_www_form_component(v.to_s)}"}
       res.join("&")
+    end
+
+    private def multipart_body(params)
+      attachments = params[:attachments] || []
+      unless attachments.is_a?(Array)
+        raise ArgumentError, "attachments must be an Array, got #{attachments.class}"
+      end
+      parts = attachments.map { |attachment| upload_part_for(attachment) }
+
+      total = parts.sum { |part| attachment_size(part) }
+      if total > MAX_ATTACHMENTS_SIZE
+        raise AttachmentsTooLargeError,
+              "Attachments total #{total} bytes; Front allows at most " \
+              "#{MAX_ATTACHMENTS_SIZE} bytes (25 MB) per message"
+      end
+
+      body = compact_params(params.reject { |key, _| key.to_s == "attachments" })
+      body[:attachments] = parts unless parts.empty?
+      body
+    end
+
+    private def upload_part_for(attachment)
+      if attachment.respond_to?(:content_type) && attachment.respond_to?(:original_filename)
+        return attachment
+      end
+      unless attachment.is_a?(Hash)
+        raise ArgumentError,
+              "attachments must be Faraday::UploadIO objects or hashes with " \
+              ":io, :filename and :content_type, got #{attachment.class}"
+      end
+
+      io = attachment[:io] || attachment["io"]
+      filename = attachment[:filename] || attachment["filename"]
+      content_type = attachment[:content_type] || attachment["content_type"] || "application/octet-stream"
+      raise ArgumentError, "attachment :io must respond to #read" unless io.respond_to?(:read)
+      raise ArgumentError, "attachment :filename is required" if filename.to_s.empty?
+
+      Faraday::Multipart::FilePart.new(io, content_type, filename)
+    end
+
+    # Best-effort size of an upload part; unknown sizes count as 0 and are
+    # left for Front to enforce.
+    private def attachment_size(part)
+      io = part.io
+      if io.respond_to?(:size)
+        io.size.to_i
+      elsif io.respond_to?(:stat)
+        io.stat.size
+      else
+        0
+      end
+    end
+
+    # Deep-removes nil values: JSON sends them as null, form data has no null.
+    private def compact_params(value)
+      case value
+      when Hash
+        value.each_with_object({}) do |(k, v), result|
+          result[k] = compact_params(v) unless v.nil?
+        end
+      when Array
+        value.compact.map { |v| compact_params(v) }
+      else
+        value
+      end
     end
 
     private def base_url
