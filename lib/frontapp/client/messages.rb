@@ -43,6 +43,8 @@ module Frontapp
       # cc               array (optional)    List of the recipient handles who will receive a copy of this message
       # bcc              array (optional)    List of the recipient handles who will receive a blind copy of this message
       # ------------------------------------------------
+      #
+      # Returns Front's parsed response body, or nil when Front replies with no body.
       def send_message(channel_id, params)
         cleaned = params.permit(:author_id,
                                 :sender_name,
@@ -85,6 +87,8 @@ module Frontapp
       # cc               array (optional)    List of the recipient handles who will receive a copy of this message. By default it will use the cc'ed recipients of the last received message.
       # bcc              array (optional)    List of the recipient handles who will receive a blind copy of this message
       # ------------------------------------------------
+      #
+      # Returns Front's parsed response body, or nil when Front replies with no body.
       def send_reply(conversation_id, params)
         cleaned = params.permit(:author_id,
                                 :sender_name,
@@ -101,7 +105,7 @@ module Frontapp
         if attachments?(cleaned)
           create_multipart(path, cleaned)
         else
-          create_without_response(path, cleaned)
+          create(path, cleaned)
         end
       end
 

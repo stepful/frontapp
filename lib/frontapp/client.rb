@@ -116,6 +116,8 @@ module Frontapp
       res.body
     end
 
+    # Posts body as JSON. Returns the parsed response body, or nil when the
+    # response has no body.
     def create(path, body)
       res = @connection.post path do |req|
         req.headers[:content_type] = 'application/json'
@@ -123,7 +125,7 @@ module Frontapp
       end
 
       raise Error.from_response(res) unless res.success?
-      JSON.parse(res.body)
+      parse_body(res)
     end
 
     # Posts params as multipart/form-data. Front only accepts file attachments
@@ -133,8 +135,11 @@ module Frontapp
     # `attachments[]` file part carrying its filename and content type.
     #
     # Attachments may be Faraday::Multipart::FilePart objects (aliased as
-    # Faraday::UploadIO) or hashes with :io, :filename and :content_type.
-    # Raises AttachmentsTooLargeError before sending when the combined
+    # Faraday::UploadIO), file-like objects that respond to #read and
+    # #original_filename (such as ActionDispatch::Http::UploadedFile), or
+    # hashes with :io, :filename and :content_type. Each IO is rewound before
+    # the body is built, so a handle that has already been read is sent in
+    # full. Raises AttachmentsTooLargeError before sending when the combined
     # attachment size exceeds MAX_ATTACHMENTS_SIZE.
     #
     # Returns the parsed JSON body, or nil when Front replies with no body.
@@ -146,7 +151,7 @@ module Frontapp
       end
 
       raise Error.from_response(res) unless res.success?
-      res.body.to_s.empty? ? nil : JSON.parse(res.body)
+      parse_body(res)
     end
 
     def create_without_response(path, body)
@@ -205,6 +210,7 @@ module Frontapp
               "Attachments total #{total} bytes; Front allows at most " \
               "#{MAX_ATTACHMENTS_SIZE} bytes (25 MB) per message"
       end
+      parts.each { |part| part.io.rewind if part.io.respond_to?(:rewind) }
 
       body = compact_params(params.reject { |key, _| key.to_s == "attachments" })
       body[:attachments] = parts unless parts.empty?
@@ -212,12 +218,19 @@ module Frontapp
     end
 
     private def upload_part_for(attachment)
-      if attachment.respond_to?(:content_type) && attachment.respond_to?(:original_filename)
-        return attachment
+      return attachment if attachment.is_a?(Faraday::Multipart::FilePart)
+
+      if attachment.respond_to?(:read) && attachment.respond_to?(:original_filename)
+        content_type = attachment.content_type if attachment.respond_to?(:content_type)
+        return Faraday::Multipart::FilePart.new(attachment,
+                                                content_type || "application/octet-stream",
+                                                attachment.original_filename)
       end
+
       unless attachment.is_a?(Hash)
         raise ArgumentError,
-              "attachments must be Faraday::UploadIO objects or hashes with " \
+              "attachments must be Faraday::UploadIO objects, file-like objects " \
+              "responding to #read and #original_filename, or hashes with " \
               ":io, :filename and :content_type, got #{attachment.class}"
       end
 
@@ -241,6 +254,10 @@ module Frontapp
       else
         0
       end
+    end
+
+    private def parse_body(res)
+      res.body.to_s.empty? ? nil : JSON.parse(res.body)
     end
 
     # Deep-removes nil values: JSON sends them as null, form data has no null.
