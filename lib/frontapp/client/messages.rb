@@ -43,6 +43,8 @@ module Frontapp
       # cc               array (optional)    List of the recipient handles who will receive a copy of this message
       # bcc              array (optional)    List of the recipient handles who will receive a blind copy of this message
       # ------------------------------------------------
+      #
+      # Returns Front's parsed response body, or nil when Front replies with no body.
       def send_message(channel_id, params)
         cleaned = params.permit(:author_id,
                                 :sender_name,
@@ -54,7 +56,12 @@ module Frontapp
                                 :to,
                                 :cc,
                                 :bcc)
-        create("channels/#{channel_id}/messages", cleaned)
+        path = "channels/#{channel_id}/messages"
+        if attachments?(cleaned)
+          create_multipart(path, cleaned)
+        else
+          create(path, cleaned)
+        end
       end
 
       # Parameters
@@ -80,6 +87,8 @@ module Frontapp
       # cc               array (optional)    List of the recipient handles who will receive a copy of this message. By default it will use the cc'ed recipients of the last received message.
       # bcc              array (optional)    List of the recipient handles who will receive a blind copy of this message
       # ------------------------------------------------
+      #
+      # Returns Front's parsed response body, or nil when Front replies with no body.
       def send_reply(conversation_id, params)
         cleaned = params.permit(:author_id,
                                 :sender_name,
@@ -92,7 +101,12 @@ module Frontapp
                                 :to,
                                 :cc,
                                 :bcc)
-        create_without_response("conversations/#{conversation_id}/messages", cleaned)
+        path = "conversations/#{conversation_id}/messages"
+        if attachments?(cleaned)
+          create_multipart(path, cleaned)
+        else
+          create(path, cleaned)
+        end
       end
 
       # Parameters
@@ -173,6 +187,13 @@ module Frontapp
                                 :tags,
                                 { metadata: [:thread_ref, :is_inbound, :is_archived, :should_skip_rules] })
         create("inboxes/#{inbox_id}/imported_messages", cleaned)
+      end
+
+      # Front only accepts file attachments as multipart form data, so a
+      # message with attachments is routed through create_multipart.
+      private def attachments?(params)
+        attachments = params[:attachments]
+        attachments.respond_to?(:empty?) ? !attachments.empty? : !attachments.nil?
       end
     end
   end
