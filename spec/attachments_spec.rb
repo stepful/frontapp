@@ -28,4 +28,34 @@ RSpec.describe 'Attachments' do
       to_return(status: 200, body: File.read("spec/fixtures/sample.txt"))
     frontapp.download_attachment(attachment_link_id)
   end
+
+  it "can get a file attachment with its response headers" do
+    body = File.read("spec/fixtures/sample.txt")
+    stub_request(:get, "#{base_url}/download/#{attachment_link_id}").
+      with( headers: headers).
+      to_return(
+        status: 200,
+        body: body,
+        headers: {
+          "Content-Type" => "application/pdf",
+          "Content-Disposition" => %Q{attachment; filename="some-file.pdf"}
+        }
+      )
+
+    res = frontapp.download_attachment_response(attachment_link_id)
+
+    expect(res.body).to eq(body)
+    expect(res.headers["Content-Type"]).to eq("application/pdf")
+    expect(res.headers["Content-Disposition"]).to eq(%Q{attachment; filename="some-file.pdf"})
+  end
+
+  it "raises on an unsuccessful download" do
+    stub_request(:get, "#{base_url}/download/#{attachment_link_id}").
+      with( headers: headers).
+      to_return(status: 404, body: "{}")
+
+    expect {
+      frontapp.download_attachment_response(attachment_link_id)
+    }.to raise_error(Frontapp::NotFoundError)
+  end
 end

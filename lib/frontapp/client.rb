@@ -111,9 +111,15 @@ module Frontapp
     end
 
     def get_raw(path)
+      get_raw_response(path).body
+    end
+
+    # Returns the whole response rather than just the body, so callers that
+    # re-serve a payload can read Content-Type and Content-Disposition off it.
+    def get_raw_response(path)
       res = @connection.get(path)
       raise Error.from_response(res) unless res.success?
-      res.body
+      res
     end
 
     # Posts body as JSON. Returns the parsed response body, or nil when the
