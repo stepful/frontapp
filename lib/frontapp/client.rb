@@ -95,6 +95,27 @@ module Frontapp
       items
     end
 
+    # One page, with Front's cursor. list walks every page and discards
+    # _pagination.next, so a caller can never resume where it left off.
+    #
+    # @return [Hash] :items, and :next — the page_token for the following page
+    def list_page(path, params = {})
+      params = params.dup
+      params.delete(:paginate)
+
+      query = format_query(params)
+      url = query.empty? ? path : "#{path}?#{query}"
+
+      res = @connection.get(url)
+      raise Error.from_response(res) unless res.success?
+      response = JSON.parse(res.body)
+
+      {
+        items: response["_results"] || [],
+        next: next_page_token(response["_pagination"]&.dig("next"))
+      }
+    end
+
     def get(path)
       res = @connection.get(path)
       raise Error.from_response(res) unless res.success?
@@ -182,6 +203,19 @@ module Frontapp
         req.body = body.to_json
       end
       raise Error.from_response(res) unless res.success?
+    end
+
+    # Front returns the next page as a whole URL; callers want only the token.
+    private def next_page_token(next_url)
+      return nil if next_url.nil? || next_url.empty?
+
+      query = URI.parse(next_url).query
+      return nil if query.nil? || query.empty?
+
+      token = URI.decode_www_form(query).to_h["page_token"]
+      token.nil? || token.empty? ? nil : token
+    rescue URI::InvalidURIError
+      nil
     end
 
     private def format_query(params)

@@ -3,7 +3,7 @@ module Frontapp
     module Links
 
       def links(params = {})
-        cleaned = params.permit({ q: [:statuses] })
+        cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("links", cleaned)
       end
 
@@ -56,7 +56,7 @@ module Frontapp
       # q.statuses  array (optional)   List of the statuses of the conversations you want to list
       # ------------------------------------------
       def get_link_conversations(link_id, params = {}, &)
-        cleaned = params.permit({ q: [:statuses] })
+        cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("links/#{link_id}/conversations", cleaned, &)
       end
     end

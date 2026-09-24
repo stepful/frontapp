@@ -88,7 +88,7 @@ module Frontapp
       # q.statuses  array (optional)   List of the statuses of the conversations you want to list
       # ----------------------------------------------
       def get_contact_conversations(contact_id, params = {}, &)
-        cleaned = params.permit({ q: [:statuses] })
+        cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("contacts/#{contact_id}/conversations", cleaned, &)
       end
 
