@@ -46,9 +46,12 @@ module Frontapp
       # ----------------------------------------------
       # q           object (optional)  Search query.
       # q.statuses  array (optional)   List of the statuses of the conversations you want to list
+      # limit       number (optional)  Max results per page
+      # page_token  string (optional)  Token from a previous page's `next`
       # ----------------------------------------------
+      # @return [Frontapp::Client::List] pages of `{ items:, next: }`
       def get_inbox_conversations(inbox_id, params = {}, &)
-        cleaned = params.permit({ q: [:statuses] })
+        cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("inboxes/#{inbox_id}/conversations", cleaned, &)
       end
 
