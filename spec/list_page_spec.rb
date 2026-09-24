@@ -67,29 +67,54 @@ RSpec.describe 'list_page' do
     expect(a_request(:get, "#{base_url}/links?page_token=abc123")).to have_been_made
   end
 
-  describe 'the widened whitelists' do
-    it 'passes limit and page_token through get_contact_conversations' do
-      stub_request(:get, "#{base_url}/contacts/#{contact_id}/conversations?limit=10&page_token=abc123")
+  describe 'list_contact_conversations' do
+    it 'returns a page and its cursor' do
+      next_url = "#{base_url}/contacts/#{contact_id}/conversations?page_token=abc123"
+      stub_request(:get, "#{base_url}/contacts/#{contact_id}/conversations?limit=10")
+        .with(headers: headers)
+        .to_return(status: 200, body: page_response(next_url), headers: {})
+
+      page = frontapp.list_contact_conversations(contact_id, { limit: 10 })
+
+      expect(page[:items].map { |c| c["id"] }).to eq(["cnv_55c8c149"])
+      expect(page[:next]).to eq("abc123")
+    end
+
+    it 'sends statuses, limit and page_token' do
+      url = "#{base_url}/contacts/#{contact_id}/conversations" \
+            "?q[statuses][]=archived&limit=10&page_token=abc123"
+      stub_request(:get, url)
         .with(headers: headers)
         .to_return(status: 200, body: page_response(nil), headers: {})
 
-      frontapp.get_contact_conversations(contact_id, { limit: 10, page_token: "abc123" })
+      frontapp.list_contact_conversations(
+        contact_id,
+        { q: { statuses: [:archived] }, limit: 10, page_token: "abc123" }
+      )
 
-      expect(
-        a_request(:get, "#{base_url}/contacts/#{contact_id}/conversations?limit=10&page_token=abc123")
-      ).to have_been_made
+      expect(a_request(:get, url)).to have_been_made
     end
 
-    it 'still drops params Front does not accept' do
+    it 'drops params Front does not accept' do
       stub_request(:get, "#{base_url}/contacts/#{contact_id}/conversations?limit=10")
         .with(headers: headers)
         .to_return(status: 200, body: page_response(nil), headers: {})
 
-      frontapp.get_contact_conversations(contact_id, { limit: 10, nonsense: "x" })
+      frontapp.list_contact_conversations(contact_id, { limit: 10, nonsense: "x" })
 
       expect(
         a_request(:get, "#{base_url}/contacts/#{contact_id}/conversations?limit=10")
       ).to have_been_made
     end
+
+    # get_contact_conversations still walks every page and returns rows.
+    it 'leaves get_contact_conversations returning an Array' do
+      stub_request(:get, "#{base_url}/contacts/#{contact_id}/conversations")
+        .with(headers: headers)
+        .to_return(status: 200, body: page_response(nil), headers: {})
+
+      expect(frontapp.get_contact_conversations(contact_id)).to be_an(Array)
+    end
   end
+
 end

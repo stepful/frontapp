@@ -48,7 +48,7 @@ module Frontapp
       # q.statuses  array (optional)   List of the statuses of the conversations you want to list
       # ----------------------------------------------
       def get_teammate_conversations(teammate_id, params = {}, &)
-        cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
+        cleaned = params.permit({ q: [:statuses] })
         list("teammates/#{teammate_id}/conversations", cleaned, &)
       end
 
