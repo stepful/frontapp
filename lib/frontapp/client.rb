@@ -100,9 +100,10 @@ module Frontapp
     #
     # @return [Hash] :items, and :next — the page_token for the following page
     def list_page(path, params = {})
-      # paginate is list's control key, not a Front param, so a hash built for
-      # list can be handed here without it reaching the query string.
-      params = params.except(:paginate)
+      # paginate is list's control key, not a Front param. dup so a caller's
+      # hash survives the delete, which list does not bother with.
+      params = params.dup
+      params.delete(:paginate)
 
       query = format_query(params)
       url = query.empty? ? path : "#{path}?#{query}"
