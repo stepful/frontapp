@@ -202,7 +202,7 @@ RSpec.describe 'Messages' do
       {
         "Authorization" => "Bearer",
         "Content-Type" => %r{\Amultipart/form-data; boundary=.+},
-        "User-Agent" => "Frontapp Ruby Gem 0.0.12"
+        "User-Agent" => "Frontapp Ruby Gem 0.1.0"
       }
     }
     let(:base_data) {

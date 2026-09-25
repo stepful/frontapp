@@ -86,9 +86,12 @@ module Frontapp
       # ----------------------------------------------
       # q           object (optional)  Search query.
       # q.statuses  array (optional)   List of the statuses of the conversations you want to list
+      # limit       number (optional)  Max results per page
+      # page_token  string (optional)  Token from a previous page's `next_page_token`
       # ----------------------------------------------
+      # @return [Enumerator] of Frontapp::Client::Page
       def get_contact_conversations(contact_id, params = {}, &)
-        cleaned = params.permit({ q: [:statuses] })
+        cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("contacts/#{contact_id}/conversations", cleaned, &)
       end
 

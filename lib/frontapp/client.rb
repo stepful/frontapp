@@ -10,6 +10,7 @@ require_relative 'client/contacts'
 require_relative 'client/conversations'
 require_relative 'client/events'
 require_relative 'client/inboxes'
+require_relative 'client/page'
 require_relative 'client/messages'
 require_relative 'client/rules'
 require_relative 'client/tags'
@@ -67,32 +68,41 @@ module Frontapp
       end
     end
 
+    # Lazy page enumerator for Front list endpoints.
+    #
+    # Yields a Page (`items`, `next_page_token`) for each page.
+    # `next_page_token` is extracted from Front's `_pagination.next` URL (or
+    # nil on the last page), so a caller can resume later by passing it back
+    # in as `page_token:`.
+    #
+    # Pagination is lazy: `.first` fetches one page; full iteration (or a
+    # block) follows `_pagination.next` until exhausted.
+    #
+    # @return [Enumerator] of Page
     def list(path, params = {}, &block)
-      paginate = params.delete(:paginate)
-      paginate = true if paginate.nil?
+      enum = Enumerator.new do |yielder|
+        # format_query mutates its argument; dup so the caller's hash is
+        # untouched and the enumerator can be rewound
+        query = format_query(params.dup)
+        url = query.empty? ? path : "#{path}?#{query}"
 
-      items = block ? nil : []
+        while url
+          res = @connection.get(url)
+          raise Error.from_response(res) unless res.success?
+          response = JSON.parse(res.body)
+          next_url = response["_pagination"]&.dig("next")
+          next_url = nil if next_url.nil? || next_url.to_s.empty?
 
-      query = format_query(params)
-      url = query.empty? ? path : "#{path}?#{query}"
+          yielder << Page.new(
+            items: response["_results"] || [],
+            next_page_token: page_token_from(next_url)
+          )
 
-      while url
-        res = @connection.get(url)
-        raise Error.from_response(res) unless res.success?
-        response = JSON.parse(res.body)
-        results = response["_results"] || []
-        url = paginate ? response["_pagination"]&.dig("next") : nil
-
-        unless results.empty?
-          if items
-            items.concat(results)
-          else
-            block.call(results)
-          end
+          url = next_url
         end
       end
 
-      items
+      block ? enum.each(&block) : enum
     end
 
     def get(path)
@@ -182,6 +192,19 @@ module Frontapp
         req.body = body.to_json
       end
       raise Error.from_response(res) unless res.success?
+    end
+
+    # Front returns the next page as a whole URL; callers want only the token.
+    private def page_token_from(next_url)
+      return nil if next_url.nil? || next_url.empty?
+
+      query = URI.parse(next_url).query
+      return nil if query.nil? || query.empty?
+
+      token = URI.decode_www_form(query).to_h["page_token"]
+      token.nil? || token.empty? ? nil : token
+    rescue URI::InvalidURIError
+      nil
     end
 
     private def format_query(params)

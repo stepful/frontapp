@@ -23,6 +23,33 @@ Optionally, set a custom user agent to identify your integration
 client = Frontapp::Client.new(auth_token: 'token', user_agent: 'Eye-Phone Integration (engineering@planet-express.com')
 ```
 
+### Pagination
+Methods that list a collection (`client.conversations`, `client.get_contact_conversations`, etc.) return a
+lazy `Enumerator` of `Frontapp::Client::Page` objects. Each page has `items` (the rows
+Front returned) and `next_page_token` (the `page_token` for the following page, or `nil` on the last page).
+
+Requests are only made as you iterate, so only the page you're working on is held in memory.
+
+```ruby
+# Fetch a single page (one request)
+page = client.get_contact_conversations("ctc_55c8c149", { limit: 25 }).first
+page.items           # => [{ "id" => "cnv_55c8c149", ... }, ...]
+page.next_page_token # => "abc123", or nil on the last page
+
+# Resume from a token, e.g. one handed back by your own API's client
+page = client.get_contact_conversations("ctc_55c8c149", { limit: 25, page_token: "abc123" }).first
+
+# Walk every page, stopping whenever you like
+client.conversations.each do |page|
+  page.items.each { |conversation| process(conversation) }
+end
+
+# Load every item across all pages into one Array
+conversations = client.conversations.flat_map(&:items)
+```
+
+A `Page` is a `Struct`, so `page[:items]` and `page[:next_page_token]` work too.
+
 ### Attachments
 ```ruby
 # Download a file attachment
@@ -396,6 +423,7 @@ client.update_link!("top_55c8c149", { name: "Something new" })
 # Get all conversations for a link
 # Optionally include a filter for conversation statuses
 conversations = client.get_link_conversations("top_55c8c149", { q: { statuses: ["assigned", "unassigned"] } })
+```
 
 ### Exports
 ```ruby
