@@ -117,6 +117,6 @@ def json_headers
     "Accept" => "application/json",
     "Authorization" => "Bearer",
     'Accept-Encoding'=>'gzip;q=1.0,deflate;q=0.6,identity;q=0.3',
-    'User-Agent'=>'Frontapp Ruby Gem 0.0.12'
+    'User-Agent'=>'Frontapp Ruby Gem 0.1.0'
   }
 end
