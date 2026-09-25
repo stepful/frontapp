@@ -70,9 +70,10 @@ module Frontapp
 
     # Lazy page enumerator for Front list endpoints.
     #
-    # Yields a Page (`items`, `next`) for each page. `next` is the page_token
-    # extracted from Front's `_pagination.next` URL (or nil on the last
-    # page), so a caller can resume later by passing `page_token:` back in.
+    # Yields a Page (`items`, `next_page_token`) for each page.
+    # `next_page_token` is extracted from Front's `_pagination.next` URL (or
+    # nil on the last page), so a caller can resume later by passing it back
+    # in as `page_token:`.
     #
     # Pagination is lazy: `.first` fetches one page; full iteration (or a
     # block) follows `_pagination.next` until exhausted.
@@ -94,7 +95,7 @@ module Frontapp
 
           yielder << Page.new(
             items: response["_results"] || [],
-            next: next_page_token(next_url)
+            next_page_token: page_token_from(next_url)
           )
 
           url = next_url
@@ -194,7 +195,7 @@ module Frontapp
     end
 
     # Front returns the next page as a whole URL; callers want only the token.
-    private def next_page_token(next_url)
+    private def page_token_from(next_url)
       return nil if next_url.nil? || next_url.empty?
 
       query = URI.parse(next_url).query

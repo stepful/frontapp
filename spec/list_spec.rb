@@ -33,7 +33,7 @@ RSpec.describe 'list' do
     page = result.first
     expect(page).to be_a(Frontapp::Client::Page)
     expect(page.items.map { |r| r["id"] }).to eq(["top_1"])
-    expect(page.next).to be_nil
+    expect(page.next_page_token).to be_nil
     expect(page[:items]).to eq(page.items)
     expect(a_request(:get, "#{base_url}/links")).to have_been_made.once
   end
@@ -46,7 +46,7 @@ RSpec.describe 'list' do
 
     page = frontapp.list("links", { limit: 10 }).first
 
-    expect(page.next).to eq("abc123")
+    expect(page.next_page_token).to eq("abc123")
   end
 
   it 'sends a caller-supplied page_token' do
@@ -73,13 +73,13 @@ RSpec.describe 'list' do
     first = enum.next
 
     expect(first.items.map { |r| r["id"] }).to eq(["top_1"])
-    expect(first.next).to eq("tok2")
+    expect(first.next_page_token).to eq("tok2")
     expect(a_request(:get, "#{base_url}/links")).to have_been_made.once
     expect(a_request(:get, "#{base_url}/links?page_token=tok2")).not_to have_been_made
 
     second = enum.next
     expect(second.items.map { |r| r["id"] }).to eq(["top_2"])
-    expect(second.next).to be_nil
+    expect(second.next_page_token).to be_nil
     expect(a_request(:get, "#{base_url}/links?page_token=tok2")).to have_been_made.once
   end
 
@@ -106,7 +106,7 @@ RSpec.describe 'list' do
     pages = frontapp.list("links").first(1)
 
     expect(pages.size).to eq(1)
-    expect(pages.first.next).to eq("tok2")
+    expect(pages.first.next_page_token).to eq("tok2")
     expect(a_request(:get, "#{base_url}/links?page_token=tok2")).not_to have_been_made
   end
 
@@ -115,7 +115,7 @@ RSpec.describe 'list' do
       .with(headers: headers)
       .to_return(status: 200, body: page_response(ids: ["top_1"], next_url: "#{base_url}/links?limit=10"), headers: {})
 
-    expect(frontapp.list("links").first.next).to be_nil
+    expect(frontapp.list("links").first.next_page_token).to be_nil
   end
 
   it 'yields pages to a block' do
@@ -149,7 +149,7 @@ RSpec.describe 'list' do
       expect(result).to be_an(Enumerator)
       page = result.first
       expect(page.items.map { |c| c["id"] }).to eq(["cnv_1"])
-      expect(page.next).to eq("next")
+      expect(page.next_page_token).to eq("next")
       expect(a_request(:get, url)).to have_been_made
     end
 
