@@ -25,7 +25,7 @@ client = Frontapp::Client.new(auth_token: 'token', user_agent: 'Eye-Phone Integr
 
 ### Pagination
 Methods that list a collection (`client.conversations`, `client.get_contact_conversations`, etc.) return a
-lazy `Frontapp::Client::List` enumerator of `Frontapp::Client::Page` objects. Each page has `items` (the rows
+lazy `Enumerator` of `Frontapp::Client::Page` objects. Each page has `items` (the rows
 Front returned) and `next` (the `page_token` for the following page, or `nil` on the last page).
 
 Requests are only made as you iterate, so only the page you're working on is held in memory.

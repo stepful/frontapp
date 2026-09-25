@@ -20,14 +20,14 @@ RSpec.describe 'list' do
     }
   end
 
-  it 'returns a lazy List enumerator of pages' do
+  it 'returns a lazy Enumerator of pages' do
     stub_request(:get, "#{base_url}/links")
       .with(headers: headers)
       .to_return(status: 200, body: page_response(ids: ["top_1"]), headers: {})
 
     result = frontapp.list("links")
 
-    expect(result).to be_a(Frontapp::Client::List)
+    expect(result).to be_an(Enumerator)
     expect(a_request(:get, "#{base_url}/links")).not_to have_been_made
 
     page = result.first
@@ -130,7 +130,7 @@ RSpec.describe 'list' do
   end
 
   describe 'get_contact_conversations' do
-    it 'returns a List and passes limit and page_token through' do
+    it 'returns an Enumerator and passes limit and page_token through' do
       url = "#{base_url}/contacts/#{contact_id}/conversations" \
             "?q[statuses][]=archived&limit=10&page_token=abc123"
       stub_request(:get, url)
@@ -146,7 +146,7 @@ RSpec.describe 'list' do
         { q: { statuses: [:archived] }, limit: 10, page_token: "abc123" }
       )
 
-      expect(result).to be_a(Frontapp::Client::List)
+      expect(result).to be_an(Enumerator)
       page = result.first
       expect(page.items.map { |c| c["id"] }).to eq(["cnv_1"])
       expect(page.next).to eq("next")

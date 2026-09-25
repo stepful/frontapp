@@ -57,7 +57,7 @@ module Frontapp
       # limit       number (optional)  Max results per page
       # page_token  string (optional)  Token from a previous page's `next`
       # ------------------------------------------
-      # @return [Frontapp::Client::List] of Frontapp::Client::Page
+      # @return [Enumerator] of Frontapp::Client::Page
       def get_link_conversations(link_id, params = {}, &)
         cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("links/#{link_id}/conversations", cleaned, &)

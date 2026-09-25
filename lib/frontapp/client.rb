@@ -10,7 +10,7 @@ require_relative 'client/contacts'
 require_relative 'client/conversations'
 require_relative 'client/events'
 require_relative 'client/inboxes'
-require_relative 'client/list'
+require_relative 'client/page'
 require_relative 'client/messages'
 require_relative 'client/rules'
 require_relative 'client/tags'
@@ -77,9 +77,9 @@ module Frontapp
     # Pagination is lazy: `.first` fetches one page; full iteration (or a
     # block) follows `_pagination.next` until exhausted.
     #
-    # @return [Frontapp::Client::List]
+    # @return [Enumerator] of Page
     def list(path, params = {}, &block)
-      enum = List.new do |yielder|
+      enum = Enumerator.new do |yielder|
         # format_query mutates its argument; dup so the caller's hash is
         # untouched and the enumerator can be rewound
         query = format_query(params.dup)
