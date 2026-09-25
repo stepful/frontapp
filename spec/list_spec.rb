@@ -97,13 +97,13 @@ RSpec.describe 'list' do
     expect(items.map { |r| r["id"] }).to eq(["top_1", "top_2"])
   end
 
-  it 'stops after one page when paginate is false' do
+  it 'fetches only as many pages as the consumer takes' do
     page1_next = "#{base_url}/links?page_token=tok2"
     stub_request(:get, "#{base_url}/links")
       .with(headers: headers)
       .to_return(status: 200, body: page_response(ids: ["top_1"], next_url: page1_next), headers: {})
 
-    pages = frontapp.list("links", { paginate: false }).to_a
+    pages = frontapp.list("links").first(1)
 
     expect(pages.size).to eq(1)
     expect(pages.first.next).to eq("tok2")

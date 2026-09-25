@@ -75,18 +75,13 @@ module Frontapp
     # page), so a caller can resume later by passing `page_token:` back in.
     #
     # Pagination is lazy: `.first` fetches one page; full iteration (or a
-    # block) follows `_pagination.next` until exhausted. Pass
-    # `paginate: false` to stop after the first page even when iterating.
+    # block) follows `_pagination.next` until exhausted.
     #
     # @return [Frontapp::Client::List]
     def list(path, params = {}, &block)
-      # dup so a caller's hash survives deletes (paginate, and format_query's :q)
-      params = params.dup
-      paginate = params.delete(:paginate)
-      paginate = true if paginate.nil?
-
       enum = List.new do |yielder|
-        # format_query mutates; re-dup so the enumerator can be rewound
+        # format_query mutates its argument; dup so the caller's hash is
+        # untouched and the enumerator can be rewound
         query = format_query(params.dup)
         url = query.empty? ? path : "#{path}?#{query}"
 
@@ -102,7 +97,6 @@ module Frontapp
             next: next_page_token(next_url)
           )
 
-          break unless paginate
           url = next_url
         end
       end
