@@ -89,7 +89,7 @@ module Frontapp
       # limit       number (optional)  Max results per page
       # page_token  string (optional)  Token from a previous page's `next`
       # ----------------------------------------------
-      # @return [Frontapp::Client::List] pages of `{ items:, next: }`
+      # @return [Frontapp::Client::List] of Frontapp::Client::Page
       def get_contact_conversations(contact_id, params = {}, &)
         cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("contacts/#{contact_id}/conversations", cleaned, &)

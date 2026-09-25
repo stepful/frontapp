@@ -70,7 +70,7 @@ module Frontapp
 
     # Lazy page enumerator for Front list endpoints.
     #
-    # Yields `{ items:, next: }` for each page. `next` is the page_token
+    # Yields a Page (`items`, `next`) for each page. `next` is the page_token
     # extracted from Front's `_pagination.next` URL (or nil on the last
     # page), so a caller can resume later by passing `page_token:` back in.
     #
@@ -97,10 +97,10 @@ module Frontapp
           next_url = response["_pagination"]&.dig("next")
           next_url = nil if next_url.nil? || next_url.to_s.empty?
 
-          yielder << {
+          yielder << Page.new(
             items: response["_results"] || [],
             next: next_page_token(next_url)
-          }
+          )
 
           break unless paginate
           url = next_url

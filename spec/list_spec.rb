@@ -31,8 +31,10 @@ RSpec.describe 'list' do
     expect(a_request(:get, "#{base_url}/links")).not_to have_been_made
 
     page = result.first
-    expect(page[:items].map { |r| r["id"] }).to eq(["top_1"])
-    expect(page[:next]).to be_nil
+    expect(page).to be_a(Frontapp::Client::Page)
+    expect(page.items.map { |r| r["id"] }).to eq(["top_1"])
+    expect(page.next).to be_nil
+    expect(page[:items]).to eq(page.items)
     expect(a_request(:get, "#{base_url}/links")).to have_been_made.once
   end
 
@@ -44,7 +46,7 @@ RSpec.describe 'list' do
 
     page = frontapp.list("links", { limit: 10 }).first
 
-    expect(page[:next]).to eq("abc123")
+    expect(page.next).to eq("abc123")
   end
 
   it 'sends a caller-supplied page_token' do
@@ -54,7 +56,7 @@ RSpec.describe 'list' do
 
     page = frontapp.list("links", { page_token: "abc123" }).first
 
-    expect(page[:items].map { |r| r["id"] }).to eq(["top_2"])
+    expect(page.items.map { |r| r["id"] }).to eq(["top_2"])
     expect(a_request(:get, "#{base_url}/links?page_token=abc123")).to have_been_made
   end
 
@@ -70,14 +72,14 @@ RSpec.describe 'list' do
     enum = frontapp.list("links")
     first = enum.next
 
-    expect(first[:items].map { |r| r["id"] }).to eq(["top_1"])
-    expect(first[:next]).to eq("tok2")
+    expect(first.items.map { |r| r["id"] }).to eq(["top_1"])
+    expect(first.next).to eq("tok2")
     expect(a_request(:get, "#{base_url}/links")).to have_been_made.once
     expect(a_request(:get, "#{base_url}/links?page_token=tok2")).not_to have_been_made
 
     second = enum.next
-    expect(second[:items].map { |r| r["id"] }).to eq(["top_2"])
-    expect(second[:next]).to be_nil
+    expect(second.items.map { |r| r["id"] }).to eq(["top_2"])
+    expect(second.next).to be_nil
     expect(a_request(:get, "#{base_url}/links?page_token=tok2")).to have_been_made.once
   end
 
@@ -90,7 +92,7 @@ RSpec.describe 'list' do
       .with(headers: headers)
       .to_return(status: 200, body: page_response(ids: ["top_2"]), headers: {})
 
-    items = frontapp.list("links").flat_map { |page| page[:items] }
+    items = frontapp.list("links").flat_map(&:items)
 
     expect(items.map { |r| r["id"] }).to eq(["top_1", "top_2"])
   end
@@ -104,7 +106,7 @@ RSpec.describe 'list' do
     pages = frontapp.list("links", { paginate: false }).to_a
 
     expect(pages.size).to eq(1)
-    expect(pages.first[:next]).to eq("tok2")
+    expect(pages.first.next).to eq("tok2")
     expect(a_request(:get, "#{base_url}/links?page_token=tok2")).not_to have_been_made
   end
 
@@ -113,7 +115,7 @@ RSpec.describe 'list' do
       .with(headers: headers)
       .to_return(status: 200, body: page_response(ids: ["top_1"], next_url: "#{base_url}/links?limit=10"), headers: {})
 
-    expect(frontapp.list("links").first[:next]).to be_nil
+    expect(frontapp.list("links").first.next).to be_nil
   end
 
   it 'yields pages to a block' do
@@ -122,7 +124,7 @@ RSpec.describe 'list' do
       .to_return(status: 200, body: page_response(ids: ["top_1"]), headers: {})
 
     seen = []
-    frontapp.list("links") { |page| seen << page[:items].map { |r| r["id"] } }
+    frontapp.list("links") { |page| seen << page.items.map { |r| r["id"] } }
 
     expect(seen).to eq([["top_1"]])
   end
@@ -146,8 +148,8 @@ RSpec.describe 'list' do
 
       expect(result).to be_a(Frontapp::Client::List)
       page = result.first
-      expect(page[:items].map { |c| c["id"] }).to eq(["cnv_1"])
-      expect(page[:next]).to eq("next")
+      expect(page.items.map { |c| c["id"] }).to eq(["cnv_1"])
+      expect(page.next).to eq("next")
       expect(a_request(:get, url)).to have_been_made
     end
 

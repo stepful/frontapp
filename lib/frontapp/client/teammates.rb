@@ -49,7 +49,7 @@ module Frontapp
       # limit       number (optional)  Max results per page
       # page_token  string (optional)  Token from a previous page's `next`
       # ----------------------------------------------
-      # @return [Frontapp::Client::List] pages of `{ items:, next: }`
+      # @return [Frontapp::Client::List] of Frontapp::Client::Page
       def get_teammate_conversations(teammate_id, params = {}, &)
         cleaned = params.permit({ q: [:statuses] }, :limit, :page_token)
         list("teammates/#{teammate_id}/conversations", cleaned, &)
