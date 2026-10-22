@@ -11,6 +11,7 @@ require_relative 'client/conversations'
 require_relative 'client/events'
 require_relative 'client/inboxes'
 require_relative 'client/page'
+require_relative 'client/rate_limit'
 require_relative 'client/messages'
 require_relative 'client/rules'
 require_relative 'client/tags'
@@ -49,9 +50,18 @@ module Frontapp
     include Frontapp::Client::Links
     include Frontapp::Client::Exports
 
+    # The RateLimit of the latest response that carried one.
+    attr_reader :rate_limit
+
+    # options[:on_rate_limit] is called with each response's RateLimit.
     def initialize(options={})
       auth_token = options[:auth_token]
       user_agent = options[:user_agent] || "Frontapp Ruby Gem #{VERSION}"
+      on_rate_limit = options[:on_rate_limit]
+      track_rate_limit = lambda do |rate_limit|
+        @rate_limit = rate_limit
+        on_rate_limit&.call(rate_limit)
+      end
       @connection = Faraday.new(
         url: base_url,
         headers: {
@@ -65,6 +75,7 @@ module Frontapp
         # Faraday adds url_encoded by default only when no block is given;
         # keep it so the middleware stack is unchanged for existing requests.
         f.request(:url_encoded)
+        f.use(RateLimitTracker, track_rate_limit)
       end
     end
 

@@ -50,6 +50,24 @@ conversations = client.conversations.flat_map(&:items)
 
 A `Page` is a `Struct`, so `page[:items]` and `page[:next_page_token]` work too.
 
+### Rate limits
+Every response's rate-limit headers are parsed into a `Frontapp::Client::RateLimit`
+(`limit`, `remaining`, `reset_at`, `retry_after`, `tier`). Front's budget is per API token.
+
+```ruby
+client = Frontapp::Client.new(
+  auth_token: 'token',
+  on_rate_limit: ->(rate_limit) { metrics.gauge("front.remaining", rate_limit.remaining) }
+)
+client.rate_limit # => the latest response's RateLimit
+
+begin
+  client.update_contact!("ctc_55c8c149", { name: "Ada" })
+rescue Frontapp::TooManyRequestsError => error
+  sleep error.rate_limit.retry_after
+end
+```
+
 ### Attachments
 ```ruby
 # Download a file attachment

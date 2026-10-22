@@ -18,6 +18,10 @@ module Frontapp
     end
 
     attr_reader :response
+
+    def rate_limit
+      Client::RateLimit.from_headers(response.headers)
+    end
   end
 
   class BadRequestError < Error; end
