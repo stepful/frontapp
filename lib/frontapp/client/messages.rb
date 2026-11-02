@@ -165,6 +165,7 @@ module Frontapp
       # type                        enum (optional)     Type of the message to import. (Default: 'email')
       # assignee_id                 string (optional)   Id of the teammate who will be assigned to the conversation.
       # tags                        array (optional)    List of tag names to add to the conversation (unknown tags will automatically be created).
+      # conversation_id             string (optional)   Id of the conversation to thread the message into. Overrides metadata.thread_ref.
       # metadata                    object
       # metadata.thread_ref         string (optional)   Custom reference which will be used to thread messages. If you ommit this field, we’ll thread by sender instead.
       # metadata.is_inbound         boolean             Whether or not the message is received (inbound) or sent (outbound) by you.
@@ -185,6 +186,7 @@ module Frontapp
                                 :type,
                                 :assignee_id,
                                 :tags,
+                                :conversation_id,
                                 { metadata: [:thread_ref, :is_inbound, :is_archived, :should_skip_rules] })
         create("inboxes/#{inbox_id}/imported_messages", cleaned)
       end

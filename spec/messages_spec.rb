@@ -195,6 +195,30 @@ RSpec.describe 'Messages' do
     frontapp.import_message(inbox_id, data)
   end
 
+  it "can import a message into an existing conversation" do
+    data = {
+      sender: {
+        handle: "+15555550100"
+      },
+      to: ["+15555550199"],
+      body: "Your payment is due",
+      external_id: "sms_123",
+      created_at: 1453770984,
+      type: "sms",
+      conversation_id: conversation_id,
+      metadata: {
+        is_inbound: false,
+        is_archived: true,
+        should_skip_rules: true
+      }
+    }
+    stub_request(:post, "#{base_url}/inboxes/#{inbox_id}/imported_messages").
+      with( body: data.to_json,
+            headers: headers).
+      to_return(status: 202, body: import_message_response)
+    frontapp.import_message(inbox_id, data)
+  end
+
   describe "attachments" do
     let(:messages_url) { "#{base_url}/channels/#{channel_id}/messages" }
     let(:replies_url) { "#{base_url}/conversations/#{conversation_id}/messages" }
